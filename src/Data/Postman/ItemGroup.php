@@ -11,8 +11,7 @@ class ItemGroup
         public ?string $name,
         public ?string $description,
         public array $item
-    ) {
-    }
+    ) {}
 
     public static function parseItem($item): ItemGroup|Item
     {

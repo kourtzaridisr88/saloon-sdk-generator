@@ -7,8 +7,7 @@ class Event
     public function __construct(
         public string $listen,
         public array $script
-    ) {
-    }
+    ) {}
 
     public static function fromJson(array $json): self
     {

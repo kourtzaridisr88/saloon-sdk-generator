@@ -56,7 +56,7 @@ class DtoGenerator extends Generator
 
         foreach ($properties as $propertyName => $propertySpec) {
             $type = $this->convertOpenApiTypeToPhp($propertySpec);
-            
+
             // Check if this is a reference to another schema
             if ($propertySpec instanceof Reference) {
                 // For references, we need to use the DTO class name
@@ -69,7 +69,7 @@ class DtoGenerator extends Generator
                 // Track referenced DTOs
                 $referencedDtos[] = $dtoClassName;
             }
-            
+
             $sub = NameHelper::dtoClassName($type);
 
             if ($type === 'object' || $type == 'array') {
@@ -84,7 +84,7 @@ class DtoGenerator extends Generator
             $property = $classConstructor->addPromotedParameter($name)
                 ->setPublic()
                 ->setDefaultValue(null);
-            
+
             // Set the property type
             $property->setType($type);
 
@@ -99,8 +99,7 @@ class DtoGenerator extends Generator
         if ($generatedMappings) {
             $namespace->addUse(MapName::class);
         }
-        
-        
+
         $namespace->add($classType);
 
         $this->generated[$dtoName] = $classFile;

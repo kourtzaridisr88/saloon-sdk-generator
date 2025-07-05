@@ -30,9 +30,7 @@ use Throwable;
 
 class OpenApiParser implements Parser
 {
-    public function __construct(protected OpenApi $openApi)
-    {
-    }
+    public function __construct(protected OpenApi $openApi) {}
 
     public static function build($content): self
     {
@@ -100,7 +98,6 @@ class OpenApiParser implements Parser
     }
 
     /**
-     * @param  array  $security
      * @return \Crescat\SaloonSdkGenerator\Data\Generator\SecurityRequirement[]
      */
     protected function parseSecurityRequirements(array $security): array
@@ -116,6 +113,7 @@ class OpenApiParser implements Parser
                         $scopes
                     );
                 }
+
                 continue;
             }
 
@@ -141,7 +139,7 @@ class OpenApiParser implements Parser
     protected function parseComponents(?Components $components): \Crescat\SaloonSdkGenerator\Data\Generator\Components
     {
         if (! $components) {
-            return new \Crescat\SaloonSdkGenerator\Data\Generator\Components();
+            return new \Crescat\SaloonSdkGenerator\Data\Generator\Components;
         }
 
         $securitySchemes = [];
@@ -250,6 +248,7 @@ class OpenApiParser implements Parser
 
                     return null;
                 }
+
                 return $parameter;
             })
             ->filter() // Remove any nulls from failed resolutions

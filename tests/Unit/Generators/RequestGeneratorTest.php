@@ -27,7 +27,7 @@ beforeEach(function () {
             ]
         ),
         securityRequirements: [],
-        components: new Components(),
+        components: new Components,
         endpoints: [
             new Endpoint(
                 name: 'getUser',

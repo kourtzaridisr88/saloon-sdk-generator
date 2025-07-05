@@ -11,8 +11,7 @@ class Info
         public ?string $version = null,
         public ?string $description = null,
         public ?string $schema = null
-    ) {
-    }
+    ) {}
 
     public static function fromJson(array $json): self
     {

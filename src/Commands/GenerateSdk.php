@@ -7,6 +7,7 @@ use Crescat\SaloonSdkGenerator\Data\Generator\Config;
 use Crescat\SaloonSdkGenerator\Data\Generator\GeneratedCode;
 use Crescat\SaloonSdkGenerator\Exceptions\ParserNotRegisteredException;
 use Crescat\SaloonSdkGenerator\Factory;
+use Crescat\SaloonSdkGenerator\Generators\ComposerGenerator;
 use Crescat\SaloonSdkGenerator\Generators\PestTestGenerator;
 use Crescat\SaloonSdkGenerator\Helpers\Utils;
 use Illuminate\Support\Arr;
@@ -59,8 +60,11 @@ class GenerateSdk extends Command
         );
 
         if ($this->option('pest')) {
-            $generator->registerPostProcessor(new PestTestGenerator());
+            $generator->registerPostProcessor(new PestTestGenerator);
         }
+
+        // Always generate composer.json
+        $generator->registerPostProcessor(new ComposerGenerator($this->option('pest')));
 
         try {
             $specification = Factory::parse($type, $inputPath);
@@ -168,6 +172,37 @@ class GenerateSdk extends Command
                 }
             }
         }
+
+        // Handle other additional files (composer.json, etc.) - excluding test files
+        $otherFiles = collect($result->additionalFiles)
+            ->filter(fn ($file) => $file instanceof \Crescat\SaloonSdkGenerator\Data\TaggedOutputFile)
+            ->filter(fn ($file) => $file->tag !== 'pest')
+            ->values();
+
+        if ($otherFiles->isNotEmpty()) {
+            $this->comment("\nProject Files:");
+            foreach ($otherFiles as $file) {
+                $filePath = $this->option('output').'/'.$file->path;
+
+                if (! file_exists(dirname($filePath))) {
+                    mkdir(dirname($filePath), recursive: true);
+                }
+
+                if (file_exists($filePath) && ! $this->option('force')) {
+                    $this->warn("- File already exists: $filePath");
+
+                    continue;
+                }
+
+                $ok = file_put_contents($filePath, $file->file);
+
+                if ($ok === false) {
+                    $this->error("- Failed to write: $filePath");
+                } else {
+                    $this->line("- Created: $filePath");
+                }
+            }
+        }
     }
 
     protected function dumpToFile(PhpFile $file, $overrideFilePath = null): void
@@ -218,7 +253,7 @@ class GenerateSdk extends Command
             return;
         }
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
 
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             $this->error("- Failed to create the ZIP archive: $zipPath");

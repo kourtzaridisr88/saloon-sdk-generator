@@ -15,6 +15,5 @@ class Components
     public function __construct(
         public readonly array $schemas = [],
         public readonly array $securitySchemes = [],
-    ) {
-    }
+    ) {}
 }

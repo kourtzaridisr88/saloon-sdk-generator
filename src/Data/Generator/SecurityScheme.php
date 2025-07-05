@@ -26,6 +26,5 @@ class SecurityScheme
 
         // Only applies for openIdConnect
         public readonly ?string $openIdConnectUrl = null
-    ) {
-    }
+    ) {}
 }

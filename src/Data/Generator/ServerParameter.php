@@ -8,6 +8,5 @@ class ServerParameter
         public readonly string $name,
         public readonly string $default,
         public readonly ?string $description = null
-    ) {
-    }
+    ) {}
 }

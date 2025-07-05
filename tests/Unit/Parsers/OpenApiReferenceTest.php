@@ -9,14 +9,14 @@ it('resolves parameter references', function () {
 
     // Find the get-an-album endpoint
     $getAlbumEndpoint = collect($spec->endpoints)
-        ->first(fn($endpoint) => $endpoint->name === 'get-an-album');
-    
+        ->first(fn ($endpoint) => $endpoint->name === 'get-an-album');
+
     expect($getAlbumEndpoint)->not()->toBeNull();
-    
+
     // Should have path parameter from $ref: '#/components/parameters/PathAlbumId'
     expect($getAlbumEndpoint->pathParameters)->toHaveCount(1);
     expect($getAlbumEndpoint->pathParameters[0]->name)->toBe('id');
-    
+
     // Should have query parameter from $ref: '#/components/parameters/QueryMarket'
     expect($getAlbumEndpoint->queryParameters)->toHaveCount(1);
     expect($getAlbumEndpoint->queryParameters[0]->name)->toBe('market');

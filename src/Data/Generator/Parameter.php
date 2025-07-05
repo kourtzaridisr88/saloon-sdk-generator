@@ -9,6 +9,5 @@ class Parameter
         public bool $nullable,
         public string $name,
         public ?string $description = null
-    ) {
-    }
+    ) {}
 }

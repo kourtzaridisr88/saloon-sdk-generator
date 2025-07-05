@@ -10,7 +10,5 @@ class TaggedOutputFile
         public readonly string $tag,
         public readonly string|PhpFile $file,
         public readonly ?string $path = null
-    ) {
-
-    }
+    ) {}
 }

@@ -10,6 +10,5 @@ class BaseUrl
     public function __construct(
         public readonly string $url,
         public readonly array $parameters = [],
-    ) {
-    }
+    ) {}
 }

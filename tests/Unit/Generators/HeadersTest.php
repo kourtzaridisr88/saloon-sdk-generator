@@ -50,14 +50,14 @@ it('generates request with headers', function () {
     $requestGenerator = new RequestGenerator($config);
     $requestFiles = $requestGenerator->generate($apiSpec);
     $requestFile = $requestFiles[0];
-    
+
     $generatedRequest = (string) $requestFile;
-    
+
     // Check that headers are in constructor (Authorization and Accept-Language are filtered out by default)
     expect($generatedRequest)->not->toContain('protected string $authorization');
     expect($generatedRequest)->toContain('protected ?string $xRequestId');
     expect($generatedRequest)->not->toContain('protected ?string $acceptLanguage');
-    
+
     // Check that defaultHeaders method is generated
     expect($generatedRequest)->toContain('public function defaultHeaders(): array');
     expect($generatedRequest)->not->toContain("'Authorization' => \$this->authorization");
@@ -69,16 +69,16 @@ it('generates request with headers', function () {
     $resourceGenerator = new ResourceGenerator($config);
     $resourceFiles = $resourceGenerator->generate($apiSpec);
     $resourceFile = $resourceFiles[0];
-    
+
     $generatedResource = (string) $resourceFile;
-    
-    // Check that resource method includes header parameters
-    expect($generatedResource)->toContain('string $authorization');
+
+    // Check that resource method includes header parameters (but not filtered ones)
+    expect($generatedResource)->not->toContain('string $authorization');
     expect($generatedResource)->toContain('?string $xRequestId');
-    expect($generatedResource)->toContain('?string $acceptLanguage');
-    
+    expect($generatedResource)->not->toContain('?string $acceptLanguage');
+
     // Check that headers are passed to request constructor (with correct parameter order)
-    expect($generatedResource)->toContain('$userId, $include, $authorization, $xRequestId, $acceptLanguage');
+    expect($generatedResource)->toContain('$userId, $include, $xRequestId');
 });
 
 it('handles endpoints without headers', function () {
@@ -113,9 +113,9 @@ it('handles endpoints without headers', function () {
     $requestGenerator = new RequestGenerator($config);
     $requestFiles = $requestGenerator->generate($apiSpec);
     $requestFile = $requestFiles[0];
-    
+
     $generatedRequest = (string) $requestFile;
-    
+
     // Should not have defaultHeaders method
     expect($generatedRequest)->not->toContain('defaultHeaders');
 });

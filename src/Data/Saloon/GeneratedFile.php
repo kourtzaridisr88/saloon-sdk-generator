@@ -14,7 +14,5 @@ class GeneratedFile
         public ?string $collectionName,
         public PhpFile $phpFile,
 
-    ) {
-
-    }
+    ) {}
 }

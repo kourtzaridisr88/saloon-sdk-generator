@@ -7,10 +7,7 @@ use Crescat\SaloonSdkGenerator\Data\Generator\Config;
 
 abstract class Generator implements GeneratorContract
 {
-    public function __construct(protected ?Config $config = null)
-    {
-
-    }
+    public function __construct(protected ?Config $config = null) {}
 
     public function setConfig(?Config $config): static
     {

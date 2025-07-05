@@ -19,10 +19,7 @@ class PostmanCollectionParser implements Parser
 {
     protected array $collectionQueue = [];
 
-    public function __construct(protected PostmanCollection $postmanCollection)
-    {
-
-    }
+    public function __construct(protected PostmanCollection $postmanCollection) {}
 
     public static function build($content): self
     {

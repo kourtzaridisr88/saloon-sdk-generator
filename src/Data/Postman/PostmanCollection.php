@@ -11,8 +11,7 @@ class PostmanCollection
         public Info $info,
         public array $item,
         public array $variables
-    ) {
-    }
+    ) {}
 
     public static function fromJson(array $json): self
     {

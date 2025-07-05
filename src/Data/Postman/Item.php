@@ -12,8 +12,7 @@ class Item
         public ?string $description,
         public ?Request $request,
         public ?array $response
-    ) {
-    }
+    ) {}
 
     public static function fromJson(array $json): self
     {

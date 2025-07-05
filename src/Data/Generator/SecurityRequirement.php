@@ -10,6 +10,5 @@ class SecurityRequirement
     public function __construct(
         public readonly ?string $name,
         public readonly array $scopes = [],
-    ) {
-    }
+    ) {}
 }

@@ -19,9 +19,7 @@ class GeneratedCode
         public array $dtoClasses = [],
         public ?PhpFile $connectorClass = null,
         public array $additionalFiles = [],
-    ) {
-
-    }
+    ) {}
 
     /**
      * @return array|TaggedOutputFile[]

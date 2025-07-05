@@ -12,8 +12,7 @@ class Variable
         public string $value,
         public ?string $type,
         public ?bool $disabled
-    ) {
-    }
+    ) {}
 
     public static function fromJson(array $json): self
     {

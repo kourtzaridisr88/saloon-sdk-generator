@@ -12,8 +12,7 @@ class Request
         public ?string $description = null,
         public ?array $header = null,
         public ?Body $body = null
-    ) {
-    }
+    ) {}
 
     public static function fromJson(string|array $json): self
     {

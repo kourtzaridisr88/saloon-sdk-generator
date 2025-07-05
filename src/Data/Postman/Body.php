@@ -15,9 +15,7 @@ class Body
         public ?array $graphql,
         public ?array $options,
         public bool $disabled,
-    ) {
-
-    }
+    ) {}
 
     public function rawAsJson(): ?array
     {

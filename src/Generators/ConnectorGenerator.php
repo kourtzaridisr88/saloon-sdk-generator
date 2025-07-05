@@ -50,7 +50,7 @@ class ConnectorGenerator extends Generator
             $classType->addComment($specification->name ? "\n{$specification->description}" : $specification->description);
         }
 
-        $classFile = new PhpFile();
+        $classFile = new PhpFile;
 
         $this->addConstructor($classType, $specification);
         $this->addResolveBaseUrlMethod($classType, $specification);

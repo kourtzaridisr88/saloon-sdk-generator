@@ -15,8 +15,7 @@ class Url
         public ?array $query,
         public ?string $hash,
         public ?array $variable,
-    ) {
-    }
+    ) {}
 
     public static function fromJson($json): Url|string
     {
