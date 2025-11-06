@@ -44,7 +44,7 @@
         }
     },
     "scripts": {
-        "build": "php ./codegen app:build sdkgenerator --build-version=1.3.1",
+        "build": "php ./codegen app:build sdkgenerator --build-version=1.4.0",
         "clean": "rm -rf ./tests/Output/*",
         "generate:fiken": "./codegen generate:sdk --force --namespace=Crescat\\\\Fiken --type=openapi --name=Fiken tests/Samples/fiken.yaml --output tests/Output/Fiken --pest",
         "generate:gocardless": "./codegen generate:sdk --force --namespace=Crescat\\\\GoCardless --type=openapi --name=GoCardless tests/Samples/gocardless.json --output tests/Output/GoCardless --pest",
@@ -65,6 +65,7 @@
         "generate:drive": "./codegen generate:sdk --force --namespace=Drive\\\\Sdk --type=openapi --name=Drive tests/samples/drive.json --output tests/Output/Drive --pest",
         "generate:headers-test": "./codegen generate:sdk --force --namespace=HeadersTest\\\\Sdk --type=openapi --name=HeadersTest tests/Samples/test-headers-api.yml --output tests/Output/HeadersTest",
         "generate:nested-refs": "./codegen generate:sdk --force --namespace=NestedRefs\\\\Sdk --type=openapi --name=NestedRefs tests/Samples/nested-refs.yml --output tests/Output/NestedRefs",
+        "generate:docuseal": "./codegen generate:sdk --force --namespace=Docuseal\\\\Sdk --type=openapi --name=Docuseal tests/Samples/docuseal.yml --output tests/Output/Docuseal --pest",
         "generate:all": [
             "@generate:fiken",
             "@generate:gocardless",
@@ -80,9 +81,10 @@
             "@generate:crescat",
             "@generate:bigcommerce",
             "@generate:headers-test",
-            "@generate:nested-refs"
+            "@generate:nested-refs",
+            "@generate:docuseal"
         ],
-        "test": "vendor/bin/pest tests",
+        "test": "vendor/bin/pest tests/Feature tests/Unit tests/ArchTest.php",
         "test-coverage": "vendor/bin/pest --coverage",
         "format": "vendor/bin/pint"
     },

@@ -199,10 +199,29 @@ class OpenApiParser implements Parser
                 $requestBody = $requestBody->resolveReferences();
             }
 
-            if ($content && $content->schema?->type != null) {
-                foreach ($content->schema->properties as $name => $property) {
+            // Resolve schema if it's a reference
+            $schema = $content?->schema;
+            if ($schema instanceof Reference) {
+                try {
+                    $schema = $schema->resolve();
+                } catch (Throwable) {
+                    $schema = null;
+                }
+            }
+
+            if ($content && $schema?->type != null) {
+                foreach ($schema->properties as $name => $property) {
+                    // Resolve property if it's a reference
+                    if ($property instanceof Reference) {
+                        try {
+                            $property = $property->resolve();
+                        } catch (Throwable) {
+                            continue;
+                        }
+                    }
+
                     $bodyParameters[] = new Parameter(
-                        type: $this->mapSchemaTypeToPhpType($property->type),
+                        type: $this->mapSchemaTypeToPhpType($property->type ?? null),
                         nullable: $property->nullable ?? false,
                         name: $name,
                         description: $property->description ?? ''
@@ -254,12 +273,24 @@ class OpenApiParser implements Parser
             ->filter() // Remove any nulls from failed resolutions
             ->whereInstanceOf(OpenApiParameter::class)
             ->filter(fn (OpenApiParameter $parameter) => $parameter->in == $in)
-            ->map(fn (OpenApiParameter $parameter) => new Parameter(
-                type: $this->mapSchemaTypeToPhpType($parameter->schema?->type),
-                nullable: $parameter->required == false,
-                name: $parameter->name,
-                description: $parameter->description,
-            ))
+            ->map(function (OpenApiParameter $parameter) {
+                // Resolve schema if it's a reference
+                $schema = $parameter->schema;
+                if ($schema instanceof Reference) {
+                    try {
+                        $schema = $schema->resolve();
+                    } catch (Throwable) {
+                        $schema = null;
+                    }
+                }
+
+                return new Parameter(
+                    type: $this->mapSchemaTypeToPhpType($schema?->type ?? null),
+                    nullable: $parameter->required == false,
+                    name: $parameter->name,
+                    description: $parameter->description,
+                );
+            })
             ->values() // Reset array keys
             ->all();
     }

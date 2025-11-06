@@ -132,9 +132,9 @@ class PestTestGenerator implements PostProcessor
 
         $fileStub = str_replace('{{ requestImports }}', implode("\n", $imports), $fileStub);
 
-        // TODO: Implement dto imports
-        // $fileStub = str_replace('{{ dtoImports }}', implode("\n",$this->generateDtoNames()), $fileStub);
-        $fileStub = str_replace('{{ dtoImports }}', '', $fileStub);
+        // Generate DTO imports
+        $dtoImports = $this->generateDtoImports($endpoints);
+        $fileStub = str_replace('{{ dtoImports }}', implode("\n", $dtoImports), $fileStub);
 
         foreach ($endpoints as $endpoint) {
             $requestClassName = NameHelper::resourceClassName($endpoint->name);
@@ -199,5 +199,60 @@ class PestTestGenerator implements PostProcessor
             return null;
         }
 
+    }
+
+    /**
+     * Generate DTO import statements for endpoints
+     *
+     * @param  array|Endpoint[]  $endpoints
+     * @return array
+     */
+    protected function generateDtoImports(array $endpoints): array
+    {
+        $dtoTypes = [];
+
+        foreach ($endpoints as $endpoint) {
+            // Extract DTO types from all endpoint parameters
+            foreach ($endpoint->allParameters() as $parameter) {
+                if ($this->isDtoType($parameter->type)) {
+                    $dtoTypes[$parameter->type] = true; // Use associative array to ensure uniqueness
+                }
+            }
+        }
+
+        // Generate use statements for each unique DTO
+        $imports = [];
+        foreach (array_keys($dtoTypes) as $dtoType) {
+            $imports[] = "use {$dtoType};";
+        }
+
+        // Sort imports for consistency
+        sort($imports);
+
+        return $imports;
+    }
+
+    /**
+     * Check if a type is a DTO type (fully qualified class name in our DTO namespace)
+     *
+     * @param  string  $type
+     * @return bool
+     */
+    protected function isDtoType(string $type): bool
+    {
+        // Must contain a backslash (namespace separator)
+        if (! str_contains($type, '\\')) {
+            return false;
+        }
+
+        // Must start with our configured namespace
+        if (! str_starts_with($type, $this->config->namespace)) {
+            return false;
+        }
+
+        // Must be in the DTO namespace
+        $dtoNamespacePart = "\\{$this->config->dtoNamespaceSuffix}\\";
+
+        return str_contains($type, $dtoNamespacePart);
     }
 }

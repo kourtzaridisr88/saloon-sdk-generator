@@ -20,9 +20,6 @@ class DtoGenerator extends Generator
 
     public function generate(ApiSpecification $specification): PhpFile|array
     {
-
-        // TODO: since we are resolving the references, we get dupliate DTOs, this generator must be ran without reference resolution so we can handle references internally (generate only the base schema instead of duplicating the same dto with a different name)
-
         if ($specification->components) {
             foreach ($specification->components->schemas as $className => $schema) {
                 $this->generateDtoClass(NameHelper::safeClassName($className), $schema);

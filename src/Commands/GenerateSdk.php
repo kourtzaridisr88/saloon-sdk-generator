@@ -118,7 +118,12 @@ class GenerateSdk extends Command
             $this->line(Utils::formatNamespaceAndClass($dtoClass));
         }
 
-        // TODO: Test files
+        if ($this->option('pest')) {
+            $this->comment("\nTests:");
+            foreach ($result->getWithTag('pest') as $test) {
+                $this->line(Utils::formatNamespaceAndClass($test));
+            }
+        }
     }
 
     protected function dumpGeneratedFiles(GeneratedCode $result): void

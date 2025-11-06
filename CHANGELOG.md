@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2025-11-06
+
+### Added
+- **Test Generation**: New `--pest` flag to generate Pest PHP test suites for generated SDKs
+- `PestTestGenerator`: Automatically generates test files for each resource with proper setup and fixtures
+- `ComposerGenerator`: Generates composer.json file with proper dependencies and configuration
+- `PostProcessor` contract for extensible post-processing of generated code
+- Test stubs for Pest test generation (Pest.php, TestCase.php, resource tests)
+- Sample API specifications (Google Drive, Paddle Billing, Paddle OpenAPI)
+- Fallback to path-based naming when endpoint has no name in OpenAPI spec
+- Generated tests include proper constructor arguments, method parameters, and fixture names
+
+### Changed
+- composer.json is now always generated (not just when --pest is enabled)
+- Pinned nikic/php-parser to v4.x for compatibility
+- Improved endpoint naming fallback strategy
+
+### Fixed
+- Test generator parameter handling for path, body, query, and header parameters
+- Test generator properly respects ignored query and header parameters
+- Test suite configuration now properly excludes generated tests in tests/Output directory
+- ArchTest now properly included in test runs
+- Removed outdated TODO comment about duplicate DTOs (references work correctly)
+
+### Known Limitations
+- Test generator constructor argument handling for nullable parameters is not configurable
+- Exception handling in test generator silently returns null (no user feedback)
+- Request body type assumptions (JSON for POST/PATCH) are not configurable
+
 ## [1.3.1] - 2025-01-05
 
 ### Fixed
