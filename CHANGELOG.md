@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - Improved endpoint naming fallback strategy
 
 ### Fixed
+- OpenAPI Reference resolution in parameter schemas - properly resolves Reference objects before accessing type property (fixes #30)
 - Test generator parameter handling for path, body, query, and header parameters
 - Test generator properly respects ignored query and header parameters
 - Test suite configuration now properly excludes generated tests in tests/Output directory
