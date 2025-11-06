@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2025-11-06
+
+### Changed
+- Added Laravel 12 support to illuminate/http dependency constraint
+
 ## [1.4.0] - 2025-11-06
 
 ### Added

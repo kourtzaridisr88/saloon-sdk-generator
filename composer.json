@@ -19,7 +19,7 @@
         "cebe/php-openapi": "^1.7",
         "nikic/php-parser": "^4.18",
         "guzzlehttp/guzzle": "^7.5",
-        "illuminate/http": "^10.0|^11.0",
+        "illuminate/http": "^10.0|^11.0|^12.0",
         "laravel-zero/phar-updater": "^1.3",
         "nette/php-generator": "^4.0",
         "nunomaduro/termwind": "^1.15.1|^2.0",
@@ -44,7 +44,7 @@
         }
     },
     "scripts": {
-        "build": "php ./codegen app:build sdkgenerator --build-version=1.4.0",
+        "build": "php ./codegen app:build sdkgenerator --build-version=1.4.1",
         "clean": "rm -rf ./tests/Output/*",
         "generate:fiken": "./codegen generate:sdk --force --namespace=Crescat\\\\Fiken --type=openapi --name=Fiken tests/Samples/fiken.yaml --output tests/Output/Fiken --pest",
         "generate:gocardless": "./codegen generate:sdk --force --namespace=Crescat\\\\GoCardless --type=openapi --name=GoCardless tests/Samples/gocardless.json --output tests/Output/GoCardless --pest",
