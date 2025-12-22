@@ -13,6 +13,7 @@ use Nette\PhpGenerator\ClassType;
 use Nette\PhpGenerator\PhpFile;
 use Spatie\LaravelData\Attributes\MapName;
 use Spatie\LaravelData\Data;
+use Spatie\LaravelData\Optional;
 
 class DtoGenerator extends Generator
 {
@@ -83,7 +84,11 @@ class DtoGenerator extends Generator
                 $property->setDefaultValue(null);
             }
 
-            // Set the property type
+            // If the property is not set in the required marked as Optional.
+            if (! in_array($propertyName, $schema->required)) {
+                $type .= '|' . Optional::class;
+            }
+            // if ($propertySpec->required)
             $property->setType($type);
 
             if ($name != $propertyName) {
