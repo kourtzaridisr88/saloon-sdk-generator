@@ -26,6 +26,9 @@ class Endpoint
         public array $pathParameters = [],
         public array $bodyParameters = [],
         public array $headerParameters = [],
+        public ?string $responseDto = null,
+        public ?string $responseDtoPath = null,
+        public bool $responseDtoIsCollection = false,
     ) {}
 
     /**

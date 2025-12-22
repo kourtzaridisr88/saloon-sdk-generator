@@ -135,6 +135,17 @@ class RequestGenerator extends Generator
             MethodGeneratorHelper::generateArrayReturnMethod($classType, 'defaultHeaders', $headerParams, withArrayFilterWrapper: true);
         }
 
+        // Generate createDtoFromResponse method if a response DTO is defined
+        if ($endpoint->responseDto) {
+            $this->generateCreateDtoFromResponseMethod(
+                $classType,
+                $endpoint->responseDto,
+                $endpoint->responseDtoPath,
+                $endpoint->responseDtoIsCollection,
+                $namespace
+            );
+        }
+
         $namespace
             ->addUse(SaloonHttpMethod::class)
             ->addUse(DateTime::class)
@@ -142,5 +153,49 @@ class RequestGenerator extends Generator
             ->add($classType);
 
         return $classFile;
+    }
+
+    protected function generateCreateDtoFromResponseMethod(ClassType $classType, string $responseDtoName, ?string $responseDtoPath, bool $isCollection, $namespace): void
+    {
+        $dtoClassName = NameHelper::dtoClassName($responseDtoName);
+        $dtoFqn = "{$this->config->namespace}\\{$this->config->dtoNamespaceSuffix}\\{$dtoClassName}";
+
+        // Import the DTO class
+        $namespace->addUse($dtoFqn);
+        // Import Response class
+        $namespace->addUse(\Saloon\Http\Response::class);
+
+        $method = $classType->addMethod('createDtoFromResponse')
+            ->setPublic();
+
+        if ($isCollection) {
+            $method->setReturnType('array');
+            $method->addComment('@return ' . $dtoClassName . '[]');
+        } else {
+            $method->setReturnType($dtoFqn);
+        }
+
+        $method->addParameter('response')
+            ->setType(\Saloon\Http\Response::class);
+
+        $method->addBody('$array = $response->json();');
+        $method->addBody('');
+
+        // If the response DTO is nested in a path (e.g., 'data'), extract it
+        if ($isCollection) {
+            // For collections, map over the array
+            if ($responseDtoPath) {
+                $method->addBody(sprintf('return array_map(fn($item) => %s::from($item), $array[\'%s\']);', $dtoClassName, $responseDtoPath));
+            } else {
+                $method->addBody(sprintf('return array_map(fn($item) => %s::from($item), $array);', $dtoClassName));
+            }
+        } else {
+            // For single items
+            if ($responseDtoPath) {
+                $method->addBody(sprintf('return %s::from($array[\'%s\']);', $dtoClassName, $responseDtoPath));
+            } else {
+                $method->addBody(sprintf('return %s::from($array);', $dtoClassName));
+            }
+        }
     }
 }

@@ -85,10 +85,9 @@ class DtoGenerator extends Generator
             }
 
             // If the property is not set in the required marked as Optional.
-            if (! in_array($propertyName, $schema->required)) {
+            if (isset($schema->required) && ! in_array($propertyName, $schema->required)) {
                 $type .= '|' . Optional::class;
             }
-            // if ($propertySpec->required)
             $property->setType($type);
 
             if ($name != $propertyName) {
