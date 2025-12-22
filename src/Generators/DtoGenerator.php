@@ -34,9 +34,7 @@ class DtoGenerator extends Generator
         /** @var Schema[] $properties */
         $properties = $schema->properties ?? [];
 
-        $dtoName = NameHelper::dtoClassName($className ?: $this->config->fallbackResourceName);
-
-        $classType = new ClassType($dtoName);
+        $classType = new ClassType($className);
         $classFile = new PhpFile;
         $namespace = $classFile
             ->addNamespace("{$this->config->namespace}\\{$this->config->dtoNamespaceSuffix}");
@@ -79,8 +77,11 @@ class DtoGenerator extends Generator
             $name = NameHelper::safeVariableName($propertyName);
 
             $property = $classConstructor->addPromotedParameter($name)
-                ->setPublic()
-                ->setDefaultValue(null);
+                ->setPublic();
+
+            if (isset($propertySpec->nullable) && $propertySpec->nullable === true) {
+                $property->setDefaultValue(null);
+            }
 
             // Set the property type
             $property->setType($type);
@@ -99,7 +100,7 @@ class DtoGenerator extends Generator
 
         $namespace->add($classType);
 
-        $this->generated[$dtoName] = $classFile;
+        $this->generated[$className] = $classFile;
 
         return $classFile;
     }
