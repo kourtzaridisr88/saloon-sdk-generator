@@ -19,7 +19,8 @@
       "Bash(composer clean:*)",
       "Bash(composer generate:*)",
       "Bash(./builds/sdkgenerator generate:sdk:*)",
-      "Bash(composer build:*)"
+      "Bash(composer build:*)",
+      "Bash(./codegen generate:sdk:*)"
     ],
     "deny": []
   }

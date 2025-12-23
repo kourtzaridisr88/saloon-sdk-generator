@@ -8,7 +8,7 @@ use Crescat\SaloonSdkGenerator\Data\Generator\GeneratedCode;
 use Crescat\SaloonSdkGenerator\Exceptions\ParserNotRegisteredException;
 use Crescat\SaloonSdkGenerator\Factory;
 use Crescat\SaloonSdkGenerator\Generators\ComposerGenerator;
-use Crescat\SaloonSdkGenerator\Generators\PestTestGenerator;
+use Crescat\SaloonSdkGenerator\Generators\PhpUnitTestGenerator;
 use Crescat\SaloonSdkGenerator\Helpers\Utils;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -26,8 +26,7 @@ class GenerateSdk extends Command
                             {--output=./build : The output path where the code will be created, will be created if it does not exist.}
                             {--force : Force overwriting existing files}
                             {--dry : Dry run, will only show the files to be generated, does not create or modify any files.}
-                            {--zip : Generate a zip archive containing all the files}
-                            {--pest : Generate Pest test suites for each resource}';
+                            {--zip : Generate a zip archive containing all the files}';
 
     protected $description = 'Generate an SDK based on an API specification file.';
 
@@ -59,12 +58,11 @@ class GenerateSdk extends Command
             ),
         );
 
-        if ($this->option('pest')) {
-            $generator->registerPostProcessor(new PestTestGenerator);
-        }
+        // Always generate PHPUnit tests
+        $generator->registerPostProcessor(new PhpUnitTestGenerator);
 
         // Always generate composer.json
-        $generator->registerPostProcessor(new ComposerGenerator($this->option('pest')));
+        $generator->registerPostProcessor(new ComposerGenerator);
 
         try {
             $specification = Factory::parse($type, $inputPath);
@@ -118,11 +116,9 @@ class GenerateSdk extends Command
             $this->line(Utils::formatNamespaceAndClass($dtoClass));
         }
 
-        if ($this->option('pest')) {
-            $this->comment("\nTests:");
-            foreach ($result->getWithTag('pest') as $test) {
-                $this->line(Utils::formatNamespaceAndClass($test));
-            }
+        $this->comment("\nTests:");
+        foreach ($result->getWithTag('phpunit') as $test) {
+            $this->line($test->path);
         }
     }
 
@@ -150,38 +146,33 @@ class GenerateSdk extends Command
             $this->dumpToFile($dtoClass);
         }
 
-        if ($this->option('pest')) {
+        $this->comment("\nTests:");
+        foreach ($result->getWithTag('phpunit') as $test) {
+            $testFilePath = $this->option('output').'/'.$test->path;
 
-            $this->comment("\nTests:");
-            foreach ($result->getWithTag('pest') as $test) {
-                // TODO: Temporary Hacky workaround due to the way the PestTestGenerator works (not returning PhpFile)
+            if (! file_exists(dirname($testFilePath))) {
+                mkdir(dirname($testFilePath), recursive: true);
+            }
 
-                $testFilePath = $this->option('output').'/'.$test->path;
+            if (file_exists($testFilePath) && ! $this->option('force')) {
+                $this->warn("- File already exists: $testFilePath");
 
-                if (! file_exists(dirname($testFilePath))) {
-                    mkdir(dirname($testFilePath), recursive: true);
-                }
+                continue;
+            }
 
-                if (file_exists($testFilePath) && ! $this->option('force')) {
-                    $this->warn("- File already exists: $testFilePath");
+            $ok = file_put_contents($testFilePath, $test->file);
 
-                    return;
-                }
-
-                $ok = file_put_contents($testFilePath, $test->file);
-
-                if ($ok === false) {
-                    $this->error("- Failed to write: $testFilePath");
-                } else {
-                    $this->line("- Created: $testFilePath");
-                }
+            if ($ok === false) {
+                $this->error("- Failed to write: $testFilePath");
+            } else {
+                $this->line("- Created: $testFilePath");
             }
         }
 
         // Handle other additional files (composer.json, etc.) - excluding test files
         $otherFiles = collect($result->additionalFiles)
             ->filter(fn ($file) => $file instanceof \Crescat\SaloonSdkGenerator\Data\TaggedOutputFile)
-            ->filter(fn ($file) => $file->tag !== 'pest')
+            ->filter(fn ($file) => $file->tag !== 'phpunit')
             ->values();
 
         if ($otherFiles->isNotEmpty()) {

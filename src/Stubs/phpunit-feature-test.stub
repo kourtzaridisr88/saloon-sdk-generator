@@ -1,0 +1,26 @@
+<?php
+
+namespace {{ namespace }}\Tests\Feature;
+
+use {{ namespace }}\{{ connectorName }};
+{{ requestImports }}
+{{ dtoImports }}
+{{ authImport }}
+use {{ namespace }}\Tests\TestCase;
+use Saloon\Http\Faking\MockClient;
+use Saloon\Http\Faking\MockResponse;
+use Saloon\Http\Request;
+use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\HttpFoundation\Response;
+
+class {{ resourceName }}Test extends TestCase
+{
+    protected {{ connectorName }} $connector;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->connector = new {{ connectorName }}({{ connectorArgs }});
+    }
+{{ testMethods }}
+}

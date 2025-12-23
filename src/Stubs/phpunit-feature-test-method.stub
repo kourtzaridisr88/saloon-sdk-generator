@@ -1,0 +1,30 @@
+
+    #[Test]
+    public function {{ testMethodName }}(): void
+    {
+        $stub = file_get_contents(__DIR__ . '/../Stubs/{{ resourceName }}/{{ stubFileName }}.json');
+
+        $mockClient = new MockClient([
+{{ authMock }}
+            {{ requestClass }}::class => MockResponse::make(
+                body: $stub,
+                status: Response::HTTP_OK,
+                headers: ['Content-Type' => 'application/json']
+            ),
+        ]);
+
+        $response = $this->connector
+            ->withMockClient($mockClient)
+            ->{{ resourceMethod }}()
+            ->{{ endpointMethod }}({{ methodArguments }});
+
+        $mockClient->assertSentInOrder([
+{{ assertSentInOrder }}
+        ]);
+
+        $mockClient->assertSent(function (Request $request) {
+            return $request instanceof {{ requestClass }}{{ parameterAssertions }};
+        });
+
+{{ responseDtoAssertion }}
+    }

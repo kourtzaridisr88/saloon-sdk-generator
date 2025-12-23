@@ -12,9 +12,7 @@ use Nette\PhpGenerator\PhpFile;
 
 class ComposerGenerator implements PostProcessor
 {
-    public function __construct(
-        protected bool $pestEnabled = false
-    ) {}
+    public function __construct() {}
 
     public function process(
         Config $config,
@@ -36,25 +34,16 @@ class ComposerGenerator implements PostProcessor
                     "{$config->namespace}\\" => 'src/',
                 ],
             ],
-            'scripts' => [
-                'test' => $this->pestEnabled ? 'vendor/bin/pest' : 'vendor/bin/phpunit',
-            ],
-        ];
-
-        // Add test-specific configuration if Pest is enabled
-        if ($this->pestEnabled) {
-            $composer['autoload-dev'] = [
+            'autoload-dev' => [
                 'psr-4' => [
                     "{$config->namespace}\\Tests\\" => 'tests/',
                 ],
-            ];
-
-            $composer['config'] = [
-                'allow-plugins' => [
-                    'pestphp/pest-plugin' => true,
-                ],
-            ];
-        }
+            ],
+            'scripts' => [
+                'test' => 'vendor/bin/phpunit',
+                'test-coverage' => 'vendor/bin/phpunit --coverage-html coverage',
+            ],
+        ];
 
         $generatedCode->addAdditionalFile(
             new TaggedOutputFile(
@@ -86,16 +75,6 @@ class ComposerGenerator implements PostProcessor
 
     protected function getDevDependencies(): array
     {
-        if ($this->pestEnabled) {
-            return [
-                'pestphp/pest' => '^2.0',
-                'orchestra/testbench' => '^8.0|^9.0',
-                'saloonphp/laravel-plugin' => '^3.0',
-                'spatie/laravel-data' => '^3.0|^4.0',
-                'vlucas/phpdotenv' => '^5.6',
-            ];
-        }
-
         return [
             'phpunit/phpunit' => '^10.0|^11.0',
         ];

@@ -1,0 +1,23 @@
+<?php
+
+namespace {{ namespace }}\Tests\Unit\Dto;
+
+use {{ dtoFullyQualifiedName }};
+{{ nestedDtoImports }}
+use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\Test;
+
+class {{ dtoName }}Test extends TestCase
+{
+    #[Test]
+    public function it_can_be_created_from_json(): void
+    {
+        $data = json_decode('{{ sampleJson }}', true);
+
+        $dto = {{ dtoName }}::from($data);
+
+        $this->assertInstanceOf({{ dtoName }}::class, $dto);
+{{ propertyAssertions }}
+    }
+{{ additionalTestMethods }}
+}
