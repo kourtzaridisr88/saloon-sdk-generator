@@ -29,6 +29,7 @@ class Endpoint
         public ?string $responseDto = null,
         public ?string $responseDtoPath = null,
         public bool $responseDtoIsCollection = false,
+        public bool $responseDtoIsPaginated = false,
     ) {}
 
     /**

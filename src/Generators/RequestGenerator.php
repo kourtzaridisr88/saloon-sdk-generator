@@ -142,6 +142,7 @@ class RequestGenerator extends Generator
                 $endpoint->responseDto,
                 $endpoint->responseDtoPath,
                 $endpoint->responseDtoIsCollection,
+                $endpoint->responseDtoIsPaginated,
                 $namespace
             );
         }
@@ -155,34 +156,44 @@ class RequestGenerator extends Generator
         return $classFile;
     }
 
-    protected function generateCreateDtoFromResponseMethod(ClassType $classType, string $responseDtoName, ?string $responseDtoPath, bool $isCollection, $namespace): void
+    protected function generateCreateDtoFromResponseMethod(ClassType $classType, string $responseDtoName, ?string $responseDtoPath, bool $isCollection, bool $isPaginated, $namespace): void
     {
         $dtoClassName = NameHelper::dtoClassName($responseDtoName);
         $dtoFqn = "{$this->config->namespace}\\{$this->config->dtoNamespaceSuffix}\\{$dtoClassName}";
 
-        // Import the DTO class
-        $namespace->addUse($dtoFqn);
         // Import Response class
         $namespace->addUse(\Saloon\Http\Response::class);
 
         $method = $classType->addMethod('createDtoFromResponse')
             ->setPublic();
 
-        if ($isCollection) {
-            $method->setReturnType('array');
-            $method->addComment('@return ' . $dtoClassName . '[]');
-        } else {
-            $method->setReturnType($dtoFqn);
-        }
-
         $method->addParameter('response')
             ->setType(\Saloon\Http\Response::class);
 
-        $method->addBody('$array = $response->json();');
-        $method->addBody('');
+        // Handle paginated responses
+        if ($isPaginated) {
+            $paginatedDtoClassName = "{$dtoClassName}PaginatedResponseDto";
+            $paginatedDtoFqn = "{$this->config->namespace}\\{$this->config->dtoNamespaceSuffix}\\{$paginatedDtoClassName}";
 
-        // If the response DTO is nested in a path (e.g., 'data'), extract it
-        if ($isCollection) {
+            // Import the paginated DTO class
+            $namespace->addUse($paginatedDtoFqn);
+            $namespace->addUse($dtoFqn);
+
+            $method->setReturnType($paginatedDtoFqn);
+
+            $method->addBody('$array = $response->json();');
+            $method->addBody('');
+            $method->addBody(sprintf('return %s::from($array);', $paginatedDtoClassName));
+        } elseif ($isCollection) {
+            // Import the DTO class
+            $namespace->addUse($dtoFqn);
+
+            $method->setReturnType('array');
+            $method->addComment('@return ' . $dtoClassName . '[]');
+
+            $method->addBody('$array = $response->json();');
+            $method->addBody('');
+
             // For collections, map over the array
             if ($responseDtoPath) {
                 $method->addBody(sprintf('return array_map(fn($item) => %s::from($item), $array[\'%s\']);', $dtoClassName, $responseDtoPath));
@@ -190,6 +201,14 @@ class RequestGenerator extends Generator
                 $method->addBody(sprintf('return array_map(fn($item) => %s::from($item), $array);', $dtoClassName));
             }
         } else {
+            // Import the DTO class
+            $namespace->addUse($dtoFqn);
+
+            $method->setReturnType($dtoFqn);
+
+            $method->addBody('$array = $response->json();');
+            $method->addBody('');
+
             // For single items
             if ($responseDtoPath) {
                 $method->addBody(sprintf('return %s::from($array[\'%s\']);', $dtoClassName, $responseDtoPath));

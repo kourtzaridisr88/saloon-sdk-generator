@@ -182,6 +182,7 @@ class OpenApiParser implements Parser
             responseDto: $responseDtoData['dto'] ?? null,
             responseDtoPath: $responseDtoData['path'] ?? null,
             responseDtoIsCollection: $responseDtoData['isCollection'] ?? false,
+            responseDtoIsPaginated: $responseDtoData['isPaginated'] ?? false,
         );
     }
 
@@ -208,8 +209,12 @@ class OpenApiParser implements Parser
                 'dto' => Str::afterLast($schema->getReference(), '/'),
                 'path' => null,
                 'isCollection' => false,
+                'isPaginated' => false,
             ];
         }
+
+        // Check if this is a paginated response (has both 'data' and 'meta' properties)
+        $hasMeta = isset($schema->properties['meta']) || isset($schema->properties['pagination']);
 
         // Check if the schema has a nested 'data' property with a reference
         if (isset($schema->properties['data'])) {
@@ -220,6 +225,7 @@ class OpenApiParser implements Parser
                     'dto' => Str::afterLast($dataProperty->getReference(), '/'),
                     'path' => 'data',
                     'isCollection' => false,
+                    'isPaginated' => $hasMeta,
                 ];
             }
 
@@ -232,6 +238,7 @@ class OpenApiParser implements Parser
                         'dto' => Str::afterLast($items->getReference(), '/'),
                         'path' => 'data',
                         'isCollection' => true,
+                        'isPaginated' => $hasMeta,
                     ];
                 }
             }
