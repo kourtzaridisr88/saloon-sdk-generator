@@ -1,0 +1,84 @@
+openapi: 3.0.3
+info:
+  title: Paginated API Test
+  version: 1.0.0
+  description: Test API for verifying paginated response handling
+servers:
+  - url: https://api.example.com/v1
+paths:
+  /users:
+    get:
+      operationId: list-users
+      summary: List all users (paginated)
+      responses:
+        '200':
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  meta:
+                    type: object
+                    properties:
+                      current_page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+                      last_page:
+                        type: integer
+  /products:
+    get:
+      operationId: list-products
+      summary: List all products (paginated)
+      responses:
+        '200':
+          description: Paginated list of products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+    Product:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        price:
+          type: number

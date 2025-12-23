@@ -165,6 +165,7 @@ class OpenApiParser implements Parser
 
     protected function parseEndpoint(Operation $operation, $pathParams, string $path, string $method): ?Endpoint
     {
+        $responseDtoData = $this->parseResponseDto($operation);
 
         return new Endpoint(
             name: trim($operation->operationId ?: $operation->summary ?: ''),
@@ -178,7 +179,72 @@ class OpenApiParser implements Parser
             pathParameters: $pathParams + $this->mapParams($operation->parameters ?? [], 'path'),
             bodyParameters: [], // TODO: implement "definition" parsing
             headerParameters: $this->mapParams($operation->parameters ?? [], 'header'),
+            responseDto: $responseDtoData['dto'] ?? null,
+            responseDtoPath: $responseDtoData['path'] ?? null,
+            responseDtoIsCollection: $responseDtoData['isCollection'] ?? false,
+            responseDtoIsPaginated: $responseDtoData['isPaginated'] ?? false,
         );
+    }
+
+    protected function parseResponseDto(Operation $operation): ?array
+    {
+        // Look for successful response (200, 201, or default)
+        $response = $operation->responses['200'] ?? $operation->responses['201'] ?? $operation->responses['default'] ?? null;
+
+        if (! $response) {
+            return null;
+        }
+
+        // Get the JSON content schema
+        $content = $response->content['application/json'] ?? null;
+        if (! $content || ! $content->schema) {
+            return null;
+        }
+
+        $schema = $content->schema;
+
+        // If it's a reference, extract the schema name
+        if ($schema instanceof Reference) {
+            return [
+                'dto' => Str::afterLast($schema->getReference(), '/'),
+                'path' => null,
+                'isCollection' => false,
+                'isPaginated' => false,
+            ];
+        }
+
+        // Check if this is a paginated response (has both 'data' and 'meta' properties)
+        $hasMeta = isset($schema->properties['meta']) || isset($schema->properties['pagination']);
+
+        // Check if the schema has a nested 'data' property with a reference
+        if (isset($schema->properties['data'])) {
+            $dataProperty = $schema->properties['data'];
+
+            if ($dataProperty instanceof Reference) {
+                return [
+                    'dto' => Str::afterLast($dataProperty->getReference(), '/'),
+                    'path' => 'data',
+                    'isCollection' => false,
+                    'isPaginated' => $hasMeta,
+                ];
+            }
+
+            // Check if data property is an array with items that have a reference
+            if (isset($dataProperty->type) && $dataProperty->type === 'array' && isset($dataProperty->items)) {
+                $items = $dataProperty->items;
+
+                if ($items instanceof Reference) {
+                    return [
+                        'dto' => Str::afterLast($items->getReference(), '/'),
+                        'path' => 'data',
+                        'isCollection' => true,
+                        'isPaginated' => $hasMeta,
+                    ];
+                }
+            }
+        }
+
+        return null;
     }
 
     protected function parseRequestBody(RequestBody|Reference|null $requestBody): ?array
