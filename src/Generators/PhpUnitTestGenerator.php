@@ -68,7 +68,7 @@ class PhpUnitTestGenerator implements PostProcessor
     protected function generateTestCaseFile(): TaggedOutputFile
     {
         $stub = file_get_contents(__DIR__.'/../Stubs/phpunit-testcase.stub');
-        $stub = str_replace('{{ namespace }}', $this->config->namespace, $stub);
+        $stub = str_replace('{{ namespace }}', $this->getTestNamespace(), $stub);
 
         // Convert namespace to PSR-4 path
         $testPath = $this->getTestPath('TestCase.php');
@@ -144,7 +144,8 @@ class PhpUnitTestGenerator implements PostProcessor
             $fileStub = file_get_contents(__DIR__.'/../Stubs/phpunit-feature-test.stub');
 
             $fileStub = str_replace('{{ connectorName }}', $this->config->connectorName, $fileStub);
-            $fileStub = str_replace('{{ namespace }}', $this->config->namespace, $fileStub);
+            $fileStub = str_replace('{{ sdkNamespace }}', $this->config->namespace, $fileStub);
+            $fileStub = str_replace('{{ namespace }}', $this->getTestNamespace(), $fileStub);
             $fileStub = str_replace('{{ resourceName }}', $resourceName, $fileStub);
 
             // Get connector constructor parameters for setUp method
@@ -405,7 +406,7 @@ class PhpUnitTestGenerator implements PostProcessor
 
             $stub = file_get_contents(__DIR__.'/../Stubs/phpunit-dto-test.stub');
 
-            $stub = str_replace('{{ namespace }}', $this->config->namespace, $stub);
+            $stub = str_replace('{{ namespace }}', $this->getTestNamespace(), $stub);
             $stub = str_replace('{{ dtoName }}', $dtoName, $stub);
             $stub = str_replace('{{ dtoFullyQualifiedName }}', $dtoFullyQualifiedName, $stub);
 
@@ -1204,6 +1205,18 @@ class PhpUnitTestGenerator implements PostProcessor
         // Tests go directly in tests/{relativePath}
         // Namespace is Tests\{Config->namespace}\{relativePath} but files are in tests/{relativePath}
         return "tests/{$relativePath}";
+    }
+
+    /**
+     * Get test namespace by removing \SDK suffix
+     *
+     * For namespace App\CrescatSdk\SDK:
+     *   - Returns: App\CrescatSdk (for use in Tests\App\CrescatSdk)
+     */
+    protected function getTestNamespace(): string
+    {
+        // Remove \SDK suffix if present
+        return preg_replace('/\\\\SDK$/', '', $this->config->namespace);
     }
 
     /**

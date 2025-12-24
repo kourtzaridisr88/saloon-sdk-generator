@@ -2,7 +2,7 @@
 
 namespace Tests\{{ namespace }}\Feature;
 
-use {{ namespace }}\{{ connectorName }};
+use {{ sdkNamespace }}\{{ connectorName }};
 {{ requestImports }}
 {{ dtoImports }}
 {{ authImport }}

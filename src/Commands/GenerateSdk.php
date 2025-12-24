@@ -43,10 +43,14 @@ class GenerateSdk extends Command
 
         $type = trim(strtolower($this->option('type')));
 
+        // Append \SDK to the namespace for generated classes
+        $baseNamespace = rtrim($this->option('namespace'), '\\');
+        $sdkNamespace = $baseNamespace . '\\SDK';
+
         $generator = new CodeGenerator(
             config: new Config(
                 connectorName: $this->option('name'),
-                namespace: $this->option('namespace'),
+                namespace: $sdkNamespace,
                 resourceNamespaceSuffix: 'Resource',
                 requestNamespaceSuffix: 'Requests',
                 dtoNamespaceSuffix: 'Dto',
@@ -154,6 +158,13 @@ class GenerateSdk extends Command
                 mkdir(dirname($testFilePath), recursive: true);
             }
 
+            // Check for @sdk-never-override annotation first (takes precedence over --force)
+            if ($this->hasNeverOverrideAnnotation($testFilePath)) {
+                $this->warn("- Protected by @sdk-never-override: $testFilePath");
+
+                continue;
+            }
+
             if (file_exists($testFilePath) && ! $this->option('force')) {
                 $this->warn("- File already exists: $testFilePath");
 
@@ -182,6 +193,13 @@ class GenerateSdk extends Command
 
                 if (! file_exists(dirname($filePath))) {
                     mkdir(dirname($filePath), recursive: true);
+                }
+
+                // Check for @sdk-never-override annotation first (takes precedence over --force)
+                if ($this->hasNeverOverrideAnnotation($filePath)) {
+                    $this->warn("- Protected by @sdk-never-override: $filePath");
+
+                    continue;
                 }
 
                 if (file_exists($filePath) && ! $this->option('force')) {
@@ -258,6 +276,43 @@ class GenerateSdk extends Command
         }
     }
 
+    /**
+     * Check if a file contains the @sdk-never-override annotation.
+     *
+     * This annotation can be added to the class docblock to prevent
+     * the file from being overridden, even when using the --force flag.
+     *
+     * For PHP files: Add @sdk-never-override to any docblock (typically class docblock)
+     * For JSON files (composer.json): Add "x-sdk-never-override": true field
+     *
+     * @param string $filePath Path to the file to check
+     * @return bool True if the file has the annotation, false otherwise
+     */
+    protected function hasNeverOverrideAnnotation(string $filePath): bool
+    {
+        if (!file_exists($filePath)) {
+            return false;
+        }
+
+        $content = file_get_contents($filePath);
+
+        if ($content === false) {
+            return false;
+        }
+
+        // For JSON files (like composer.json), check for x-sdk-never-override field
+        if (str_ends_with($filePath, '.json')) {
+            $decoded = json_decode($content, true);
+            if (is_array($decoded) && isset($decoded['x-sdk-never-override'])) {
+                return (bool) $decoded['x-sdk-never-override'];
+            }
+        }
+
+        // For PHP files, check if the file contains the @sdk-never-override annotation
+        // This can be in any docblock, but typically should be in the class docblock
+        return str_contains($content, '@sdk-never-override');
+    }
+
     protected function dumpToFile(PhpFile $file, $overrideFilePath = null): void
     {
         // Get namespace and class info
@@ -265,8 +320,10 @@ class GenerateSdk extends Command
         $className = Arr::first($file->getClasses())?->getName();
 
         // Remove the root namespace to get the relative path
-        // E.g., App\CrescatSdk\Resource -> Resource
-        $rootNamespace = $this->option('namespace');
+        // E.g., App\CrescatSdk\SDK\Resource -> Resource
+        // Note: We use the SDK namespace since all generated classes have \SDK appended
+        $baseNamespace = rtrim($this->option('namespace'), '\\');
+        $rootNamespace = $baseNamespace . '\\SDK';
         $relativePath = str_replace($rootNamespace, '', $namespace);
         $relativePath = ltrim($relativePath, '\\');
         $relativePath = str_replace('\\', '/', $relativePath);
@@ -280,6 +337,13 @@ class GenerateSdk extends Command
 
         if (! file_exists(dirname($filePath))) {
             mkdir(dirname($filePath), recursive: true);
+        }
+
+        // Check for @sdk-never-override annotation first (takes precedence over --force)
+        if ($this->hasNeverOverrideAnnotation($filePath)) {
+            $this->warn("- Protected by @sdk-never-override: $filePath");
+
+            return;
         }
 
         if (file_exists($filePath) && ! $this->option('force')) {

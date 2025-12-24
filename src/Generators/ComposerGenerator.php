@@ -31,12 +31,12 @@ class ComposerGenerator implements PostProcessor
             'require-dev' => $this->getDevDependencies(),
             'autoload' => [
                 'psr-4' => [
-                    "{$config->namespace}\\" => 'src/SDK/',
+                    $this->getBaseNamespace($config->namespace) => 'src/',
                 ],
             ],
             'autoload-dev' => [
                 'psr-4' => [
-                    "Tests\\{$config->namespace}\\" => 'tests/',
+                    "Tests\\{$this->getBaseNamespace($config->namespace)}" => 'tests/',
                 ],
             ],
             'scripts' => [
@@ -91,5 +91,20 @@ class ComposerGenerator implements PostProcessor
             'orchestra/testbench' => '^8.0|^9.0',
             'laravel/pint' => '^1.0',
         ];
+    }
+
+    /**
+     * Get base namespace by removing \SDK suffix
+     *
+     * @param string $namespace The full namespace (e.g., HackTheBox\ContentClient\SDK)
+     * @param bool $withTrailingSlash Whether to add trailing backslashes
+     * @return string The base namespace (e.g., HackTheBox\ContentClient\)
+     */
+    protected function getBaseNamespace(string $namespace, bool $withTrailingSlash = true): string
+    {
+        // Remove \SDK suffix if present
+        $baseNamespace = preg_replace('/\\\\SDK$/', '', $namespace);
+
+        return $withTrailingSlash ? $baseNamespace . '\\' : $baseNamespace;
     }
 }
