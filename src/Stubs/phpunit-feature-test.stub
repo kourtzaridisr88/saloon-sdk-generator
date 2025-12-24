@@ -1,12 +1,12 @@
 <?php
 
-namespace {{ namespace }}\Tests\Feature;
+namespace Tests\{{ namespace }}\Feature;
 
 use {{ namespace }}\{{ connectorName }};
 {{ requestImports }}
 {{ dtoImports }}
 {{ authImport }}
-use {{ namespace }}\Tests\TestCase;
+use Tests\{{ namespace }}\TestCase;
 use Saloon\Http\Faking\MockClient;
 use Saloon\Http\Faking\MockResponse;
 use Saloon\Http\Request;

@@ -1,0 +1,5 @@
+providers:
+  - Spatie\LaravelData\LaravelDataServiceProvider
+
+env:
+  - APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

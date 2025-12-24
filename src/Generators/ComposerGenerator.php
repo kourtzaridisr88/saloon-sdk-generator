@@ -31,17 +31,18 @@ class ComposerGenerator implements PostProcessor
             'require-dev' => $this->getDevDependencies(),
             'autoload' => [
                 'psr-4' => [
-                    "{$config->namespace}\\" => 'src/',
+                    "{$config->namespace}\\" => 'src/SDK/',
                 ],
             ],
             'autoload-dev' => [
                 'psr-4' => [
-                    "{$config->namespace}\\Tests\\" => 'tests/',
+                    "Tests\\{$config->namespace}\\" => 'tests/',
                 ],
             ],
             'scripts' => [
                 'test' => 'vendor/bin/phpunit',
                 'test-coverage' => 'vendor/bin/phpunit --coverage-html coverage',
+                'format' => 'vendor/bin/pint',
             ],
         ];
 
@@ -50,6 +51,16 @@ class ComposerGenerator implements PostProcessor
                 tag: 'composer',
                 file: json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
                 path: 'composer.json',
+            )
+        );
+
+        // Add pint.json configuration
+        $pintConfig = file_get_contents(__DIR__.'/../Stubs/pint.stub');
+        $generatedCode->addAdditionalFile(
+            new TaggedOutputFile(
+                tag: 'composer',
+                file: $pintConfig,
+                path: 'pint.json',
             )
         );
 
@@ -77,6 +88,8 @@ class ComposerGenerator implements PostProcessor
     {
         return [
             'phpunit/phpunit' => '^10.0|^11.0',
+            'orchestra/testbench' => '^8.0|^9.0',
+            'laravel/pint' => '^1.0',
         ];
     }
 }

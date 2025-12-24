@@ -55,6 +55,7 @@ class PhpUnitTestGenerator implements PostProcessor
         return [
             $this->generateTestCaseFile(),
             $this->generatePhpUnitXml(),
+            $this->generateTestbenchYaml(),
             ...$this->generateFeatureTests(),
             ...$this->generateDtoUnitTests(),
             ...$this->generatedStubs, // Include all generated stub files
@@ -69,10 +70,13 @@ class PhpUnitTestGenerator implements PostProcessor
         $stub = file_get_contents(__DIR__.'/../Stubs/phpunit-testcase.stub');
         $stub = str_replace('{{ namespace }}', $this->config->namespace, $stub);
 
+        // Convert namespace to PSR-4 path
+        $testPath = $this->getTestPath('TestCase.php');
+
         return new TaggedOutputFile(
             tag: 'phpunit',
             file: $stub,
-            path: 'tests/TestCase.php',
+            path: $testPath,
         );
     }
 
@@ -87,6 +91,20 @@ class PhpUnitTestGenerator implements PostProcessor
             tag: 'phpunit',
             file: $stub,
             path: 'phpunit.xml',
+        );
+    }
+
+    /**
+     * Generate testbench.yaml configuration for Orchestra Testbench
+     */
+    protected function generateTestbenchYaml(): TaggedOutputFile
+    {
+        $stub = file_get_contents(__DIR__.'/../Stubs/testbench.stub');
+
+        return new TaggedOutputFile(
+            tag: 'phpunit',
+            file: $stub,
+            path: 'testbench.yaml',
         );
     }
 
@@ -179,10 +197,13 @@ class PhpUnitTestGenerator implements PostProcessor
             }
             $fileStub = str_replace('{{ testMethods }}', $testMethods, $fileStub);
 
+            // Convert namespace to PSR-4 path
+            $testPath = $this->getTestPath("Feature/{$resourceName}Test.php");
+
             return new TaggedOutputFile(
                 tag: 'phpunit',
                 file: $fileStub,
-                path: "tests/Feature/{$resourceName}Test.php",
+                path: $testPath,
             );
         } catch (Exception $e) {
             return null;
@@ -328,7 +349,8 @@ class PhpUnitTestGenerator implements PostProcessor
             return '        $this->assertEquals(Response::HTTP_OK, $response->status());';
         }
 
-        $dtoClassName = class_basename($endpoint->responseDto);
+        // Normalize the DTO class name
+        $dtoClassName = $this->normalizeDtoClassName($endpoint->responseDto);
 
         return "        \$this->assertInstanceOf({$dtoClassName}::class, \$response);";
     }
@@ -340,10 +362,13 @@ class PhpUnitTestGenerator implements PostProcessor
     {
         $stubContent = $this->stubGenerator->generateStubForEndpoint($endpoint);
 
+        // Stubs path relative to tests root
+        $stubPath = $this->getTestPath("Stubs/{$resourceName}/{$stubFileName}.json");
+
         $this->generatedStubs[] = new TaggedOutputFile(
             tag: 'phpunit',
             file: $stubContent,
-            path: "tests/Stubs/{$resourceName}/{$stubFileName}.json",
+            path: $stubPath,
         );
     }
 
@@ -388,9 +413,9 @@ class PhpUnitTestGenerator implements PostProcessor
             $nestedDtoImports = $this->generateNestedDtoImports($classType);
             $stub = str_replace('{{ nestedDtoImports }}', implode("\n", $nestedDtoImports), $stub);
 
-            // Generate sample JSON
-            $sampleJson = $this->generateSampleJsonForDto($classType);
-            $stub = str_replace('{{ sampleJson }}', addslashes($sampleJson), $stub);
+            // Generate sample data array with all properties (including nullable ones)
+            $sampleDataArray = $this->generatePhpArrayString($this->generateFullPropertiesData($classType));
+            $stub = str_replace('{{ sampleDataArray }}', $sampleDataArray, $stub);
 
             // Generate property assertions
             $propertyAssertions = $this->generatePropertyAssertions($classType);
@@ -400,10 +425,13 @@ class PhpUnitTestGenerator implements PostProcessor
             $additionalTestMethods = $this->generateAdditionalDtoTestMethods($classType);
             $stub = str_replace('{{ additionalTestMethods }}', $additionalTestMethods, $stub);
 
+            // Convert namespace to PSR-4 path
+            $testPath = $this->getTestPath("Unit/Dto/{$dtoName}Test.php");
+
             return new TaggedOutputFile(
                 tag: 'phpunit',
                 file: $stub,
-                path: "tests/Unit/Dto/{$dtoName}Test.php",
+                path: $testPath,
             );
         } catch (Exception $e) {
             return null;
@@ -417,12 +445,27 @@ class PhpUnitTestGenerator implements PostProcessor
     {
         $data = [];
 
-        foreach ($classType->getProperties() as $property) {
-            $propertyName = $property->getName();
-            $type = $property->getType();
+        // Get properties from constructor promoted parameters
+        $constructor = $classType->getMethod('__construct');
+        if (!$constructor) {
+            return json_encode($data);
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            $propertyName = $param->getName();
+            $type = $param->getType();
+
+            // Skip nullable properties with defaults - they're optional
+            if ($param->isNullable() && $param->hasDefaultValue()) {
+                continue;
+            }
 
             // Generate sample value based on type
-            $data[$propertyName] = $this->generateSampleValueForType($type);
+            $data[$propertyName] = $this->generateSampleValueForType($type, $propertyName);
         }
 
         return json_encode($data);
@@ -431,9 +474,14 @@ class PhpUnitTestGenerator implements PostProcessor
     /**
      * Generate sample value based on type
      */
-    protected function generateSampleValueForType(?string $type): mixed
+    protected function generateSampleValueForType(?string $type, string $propertyName = '', bool $includeNullable = false, int $depth = 0): mixed
     {
         if (!$type) {
+            return null;
+        }
+
+        // Prevent infinite recursion
+        if ($depth > 3) {
             return null;
         }
 
@@ -446,14 +494,70 @@ class PhpUnitTestGenerator implements PostProcessor
             $type = $types[0];
         }
 
+        // Generate context-aware string values
+        if ($type === 'string') {
+            return match (true) {
+                str_contains(strtolower($propertyName), 'email') => 'test@example.com',
+                str_contains(strtolower($propertyName), 'url') || str_contains(strtolower($propertyName), 'link') => 'https://example.com',
+                str_contains(strtolower($propertyName), 'phone') => '+1234567890',
+                str_contains(strtolower($propertyName), 'id') => 'test-id-123',
+                str_contains(strtolower($propertyName), 'name') => 'Test Name',
+                str_contains(strtolower($propertyName), 'description') => 'Test description',
+                default => 'test string',
+            };
+        }
+
         return match ($type) {
-            'string' => 'test string',
             'int' => 123,
             'float' => 123.45,
             'bool' => true,
             'array' => [],
-            default => $this->isDtoType($type) ? [] : null,
+            default => $this->isDtoType($type) ? $this->generateNestedDtoSampleData($type, $includeNullable, $depth + 1) : null,
         };
+    }
+
+    /**
+     * Generate sample data for nested DTO
+     */
+    protected function generateNestedDtoSampleData(string $dtoType, bool $includeNullable = false, int $depth = 0): array
+    {
+        // Prevent infinite recursion
+        if ($depth > 3) {
+            return [];
+        }
+
+        // Try to find the DTO in generated DTOs
+        foreach ($this->generatedCode->dtoClasses as $dtoFile) {
+            $namespace = Arr::first($dtoFile->getNamespaces());
+            $classType = Arr::first($namespace->getClasses());
+            $fullClassName = $namespace->getName() . '\\' . $classType->getName();
+
+            if ($fullClassName === $dtoType || class_basename($dtoType) === $classType->getName()) {
+                $data = [];
+                $constructor = $classType->getMethod('__construct');
+
+                if (!$constructor) {
+                    return $data;
+                }
+
+                foreach ($constructor->getParameters() as $param) {
+                    if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                        continue;
+                    }
+
+                    // Skip nullable properties with defaults unless includeNullable is true
+                    if (!$includeNullable && $param->isNullable() && $param->hasDefaultValue()) {
+                        continue;
+                    }
+
+                    $data[$param->getName()] = $this->generateSampleValueForType($param->getType(), $param->getName(), $includeNullable, $depth + 1);
+                }
+
+                return $data;
+            }
+        }
+
+        return [];
     }
 
     /**
@@ -463,9 +567,59 @@ class PhpUnitTestGenerator implements PostProcessor
     {
         $assertions = [];
 
-        foreach ($classType->getProperties() as $property) {
-            $propertyName = $property->getName();
-            $assertions[] = "        // \$this->assertEquals('expected', \$dto->{$propertyName});";
+        $constructor = $classType->getMethod('__construct');
+        if (!$constructor) {
+            return '';
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            $propertyName = $param->getName();
+            $type = $param->getType();
+
+            // Remove nullable marker for type checking
+            $cleanType = str_replace('?', '', $type ?? '');
+
+            // Handle union types
+            $isUnionType = str_contains($cleanType, '|');
+            $isScalarType = false;
+
+            // Generate type assertion
+            if ($isUnionType) {
+                // Special handling for common union types
+                if ($cleanType === 'int|float') {
+                    $typeAssertion = "\$this->assertIsNumeric(\$dto->{$propertyName});";
+                    $isScalarType = true;
+                } else {
+                    // For other union types, just check it's not null
+                    $typeAssertion = "\$this->assertNotNull(\$dto->{$propertyName});";
+                    // Check if all types in union are scalar
+                    $types = explode('|', $cleanType);
+                    $isScalarType = !empty(array_intersect($types, ['string', 'int', 'float', 'bool']));
+                }
+            } else {
+                $typeAssertion = match ($cleanType) {
+                    'string' => "\$this->assertIsString(\$dto->{$propertyName});",
+                    'int' => "\$this->assertIsInt(\$dto->{$propertyName});",
+                    'float' => "\$this->assertIsFloat(\$dto->{$propertyName});",
+                    'bool' => "\$this->assertIsBool(\$dto->{$propertyName});",
+                    'array' => "\$this->assertIsArray(\$dto->{$propertyName});",
+                    default => $this->isDtoType($cleanType)
+                        ? "\$this->assertInstanceOf(" . class_basename($cleanType) . "::class, \$dto->{$propertyName});"
+                        : "\$this->assertNotNull(\$dto->{$propertyName});",
+                };
+                $isScalarType = in_array($cleanType, ['string', 'int', 'float', 'bool']);
+            }
+
+            $assertions[] = "        {$typeAssertion}";
+
+            // Generate value assertion for scalar types
+            if ($isScalarType) {
+                $assertions[] = "        \$this->assertEquals(\$data['{$propertyName}'], \$dto->{$propertyName});";
+            }
         }
 
         return implode("\n", $assertions);
@@ -483,11 +637,6 @@ class PhpUnitTestGenerator implements PostProcessor
             $methods[] = $this->generateNullablePropertiesTest($classType);
         }
 
-        // Check if DTO has nested DTOs
-        if ($this->hasNestedDtos($classType)) {
-            $methods[] = $this->generateNestedDtosTest($classType);
-        }
-
         // Check if DTO has array collections
         if ($this->hasArrayProperties($classType)) {
             $methods[] = $this->generateArrayCollectionsTest($classType);
@@ -501,8 +650,13 @@ class PhpUnitTestGenerator implements PostProcessor
      */
     protected function hasNullableProperties(ClassType $classType): bool
     {
-        foreach ($classType->getProperties() as $property) {
-            if ($property->isNullable()) {
+        $constructor = $classType->getMethod('__construct');
+        if (!$constructor) {
+            return false;
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if ($param instanceof \Nette\PhpGenerator\PromotedParameter && $param->isNullable() && $param->hasDefaultValue()) {
                 return true;
             }
         }
@@ -515,9 +669,18 @@ class PhpUnitTestGenerator implements PostProcessor
      */
     protected function hasNestedDtos(ClassType $classType): bool
     {
-        foreach ($classType->getProperties() as $property) {
-            $type = $property->getType();
-            if ($type && $this->isDtoType($type)) {
+        $constructor = $classType->getMethod('__construct');
+        if (!$constructor) {
+            return false;
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            $type = $param->getType();
+            if ($type && $this->isDtoType(str_replace('?', '', $type))) {
                 return true;
             }
         }
@@ -530,8 +693,17 @@ class PhpUnitTestGenerator implements PostProcessor
      */
     protected function hasArrayProperties(ClassType $classType): bool
     {
-        foreach ($classType->getProperties() as $property) {
-            $type = $property->getType();
+        $constructor = $classType->getMethod('__construct');
+        if (!$constructor) {
+            return false;
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            $type = $param->getType();
             if ($type && str_contains($type, 'array')) {
                 return true;
             }
@@ -547,16 +719,28 @@ class PhpUnitTestGenerator implements PostProcessor
     {
         $dtoName = $classType->getName();
 
+        // Generate data with only required properties (no nullable ones)
+        $requiredData = $this->generateRequiredPropertiesData($classType);
+        $dataArray = $this->generatePhpArrayString($requiredData);
+
+        // Get nullable property names for assertions
+        $nullableProperties = $this->getNullablePropertyNames($classType);
+        $assertions = [];
+        foreach ($nullableProperties as $propName) {
+            $assertions[] = "        \$this->assertNull(\$dto->{$propName});";
+        }
+        $assertionsStr = implode("\n", $assertions);
+
         return "    #[Test]
     public function it_handles_nullable_properties(): void
     {
-        // Test with minimal required data
-        \$data = [];
-        // TODO: Add only required properties
+        // Test with only required properties, nullable ones should be null
+        \$data = {$dataArray};
 
         \$dto = {$dtoName}::from(\$data);
 
         \$this->assertInstanceOf({$dtoName}::class, \$dto);
+{$assertionsStr}
     }";
     }
 
@@ -567,17 +751,23 @@ class PhpUnitTestGenerator implements PostProcessor
     {
         $dtoName = $classType->getName();
 
+        // Generate full data including nested DTOs
+        $fullData = $this->generateFullPropertiesData($classType);
+        $dataArray = $this->generatePhpArrayString($fullData);
+
+        // Get nested DTO properties for assertions
+        $nestedDtoAssertions = $this->getNestedDtoAssertions($classType);
+
         return "    #[Test]
     public function it_handles_nested_dtos(): void
     {
         // Test with nested DTO data
-        \$data = [];
-        // TODO: Add nested DTO structure
+        \$data = {$dataArray};
 
         \$dto = {$dtoName}::from(\$data);
 
         \$this->assertInstanceOf({$dtoName}::class, \$dto);
-        // TODO: Assert nested DTO instances
+{$nestedDtoAssertions}
     }";
     }
 
@@ -588,18 +778,184 @@ class PhpUnitTestGenerator implements PostProcessor
     {
         $dtoName = $classType->getName();
 
+        // Generate data with array collections
+        $dataWithArrays = $this->generateDataWithArrays($classType);
+        $dataArray = $this->generatePhpArrayString($dataWithArrays);
+
+        // Get array property assertions
+        $arrayAssertions = $this->getArrayPropertyAssertions($classType);
+
         return "    #[Test]
     public function it_handles_array_collections(): void
     {
         // Test with array collections
-        \$data = [];
-        // TODO: Add array collection data
+        \$data = {$dataArray};
 
         \$dto = {$dtoName}::from(\$data);
 
         \$this->assertInstanceOf({$dtoName}::class, \$dto);
-        // TODO: Assert array collections
+{$arrayAssertions}
     }";
+    }
+
+    /**
+     * Generate data with only required properties
+     */
+    protected function generateRequiredPropertiesData(ClassType $classType): array
+    {
+        $data = [];
+        $constructor = $classType->getMethod('__construct');
+
+        if (!$constructor) {
+            return $data;
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            // Skip nullable properties with defaults
+            if ($param->isNullable() && $param->hasDefaultValue()) {
+                continue;
+            }
+
+            $data[$param->getName()] = $this->generateSampleValueForType($param->getType(), $param->getName());
+        }
+
+        return $data;
+    }
+
+    /**
+     * Generate data with all properties including optional ones
+     */
+    protected function generateFullPropertiesData(ClassType $classType): array
+    {
+        $data = [];
+        $constructor = $classType->getMethod('__construct');
+
+        if (!$constructor) {
+            return $data;
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            // Include all properties including nullable ones
+            $data[$param->getName()] = $this->generateSampleValueForType($param->getType(), $param->getName(), true);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Generate data with array properties
+     */
+    protected function generateDataWithArrays(ClassType $classType): array
+    {
+        $data = $this->generateFullPropertiesData($classType);
+        $constructor = $classType->getMethod('__construct');
+
+        if (!$constructor) {
+            return $data;
+        }
+
+        // Make sure array properties have multiple items
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            $type = $param->getType();
+            if ($type && str_contains($type, 'array')) {
+                // Generate 2 sample items for arrays
+                $data[$param->getName()] = [
+                    $this->generateSampleValueForType('string', 'item'),
+                    $this->generateSampleValueForType('string', 'item'),
+                ];
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Get nullable property names
+     */
+    protected function getNullablePropertyNames(ClassType $classType): array
+    {
+        $names = [];
+        $constructor = $classType->getMethod('__construct');
+
+        if (!$constructor) {
+            return $names;
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if ($param instanceof \Nette\PhpGenerator\PromotedParameter && $param->isNullable() && $param->hasDefaultValue()) {
+                $names[] = $param->getName();
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Get nested DTO assertions
+     */
+    protected function getNestedDtoAssertions(ClassType $classType): string
+    {
+        $assertions = [];
+        $constructor = $classType->getMethod('__construct');
+
+        if (!$constructor) {
+            return '';
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            $type = str_replace('?', '', $param->getType() ?? '');
+            if ($this->isDtoType($type)) {
+                $propName = $param->getName();
+                $dtoClassName = class_basename($type);
+                $assertions[] = "        \$this->assertInstanceOf({$dtoClassName}::class, \$dto->{$propName});";
+            }
+        }
+
+        return implode("\n", $assertions);
+    }
+
+    /**
+     * Get array property assertions
+     */
+    protected function getArrayPropertyAssertions(ClassType $classType): string
+    {
+        $assertions = [];
+        $constructor = $classType->getMethod('__construct');
+
+        if (!$constructor) {
+            return '';
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            $type = $param->getType();
+            if ($type && str_contains($type, 'array')) {
+                $propName = $param->getName();
+                $assertions[] = "        \$this->assertIsArray(\$dto->{$propName});";
+                $assertions[] = "        \$this->assertCount(2, \$dto->{$propName});";
+            }
+        }
+
+        return implode("\n", $assertions);
     }
 
     /**
@@ -693,7 +1049,13 @@ class PhpUnitTestGenerator implements PostProcessor
 
         $imports = [];
         foreach (array_keys($dtoTypes) as $dtoType) {
-            $imports[] = "use {$dtoType};";
+            // Normalize the DTO class name
+            $className = $this->normalizeDtoClassName($dtoType);
+
+            // Construct proper namespace using config
+            $properNamespace = "{$this->config->namespace}\\{$this->config->dtoNamespaceSuffix}\\{$className}";
+
+            $imports[] = "use {$properNamespace};";
         }
 
         sort($imports);
@@ -702,16 +1064,101 @@ class PhpUnitTestGenerator implements PostProcessor
     }
 
     /**
+     * Convert PHP array to formatted array string for test code
+     */
+    protected function generatePhpArrayString(array $data, int $indent = 3): string
+    {
+        if (empty($data)) {
+            return '[]';
+        }
+
+        $lines = [];
+        $indentStr = str_repeat('    ', $indent);
+
+        foreach ($data as $key => $value) {
+            $formattedValue = $this->formatArrayValue($value, $indent + 1);
+            $lines[] = "{$indentStr}'{$key}' => {$formattedValue},";
+        }
+
+        $openIndent = str_repeat('    ', $indent - 1);
+        return "[\n" . implode("\n", $lines) . "\n{$openIndent}]";
+    }
+
+    /**
+     * Format a value for PHP array string
+     */
+    protected function formatArrayValue(mixed $value, int $indent): string
+    {
+        if (is_null($value)) {
+            return 'null';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+
+        if (is_string($value)) {
+            return "'" . addslashes($value) . "'";
+        }
+
+        if (is_array($value)) {
+            if (empty($value)) {
+                return '[]';
+            }
+
+            // Check if it's an associative array
+            $isAssoc = array_keys($value) !== range(0, count($value) - 1);
+
+            if ($isAssoc) {
+                // Nested associative array
+                $lines = [];
+                $indentStr = str_repeat('    ', $indent);
+
+                foreach ($value as $k => $v) {
+                    $formattedValue = $this->formatArrayValue($v, $indent + 1);
+                    $lines[] = "{$indentStr}'{$k}' => {$formattedValue},";
+                }
+
+                $openIndent = str_repeat('    ', $indent - 1);
+                return "[\n" . implode("\n", $lines) . "\n{$openIndent}]";
+            } else {
+                // Indexed array
+                $items = array_map(fn($v) => $this->formatArrayValue($v, $indent), $value);
+                return '[' . implode(', ', $items) . ']';
+            }
+        }
+
+        return 'null';
+    }
+
+    /**
      * Generate nested DTO imports for a DTO class
      */
     protected function generateNestedDtoImports(ClassType $classType): array
     {
         $imports = [];
+        $constructor = $classType->getMethod('__construct');
 
-        foreach ($classType->getProperties() as $property) {
-            $type = $property->getType();
+        if (!$constructor) {
+            return $imports;
+        }
+
+        foreach ($constructor->getParameters() as $param) {
+            if (!$param instanceof \Nette\PhpGenerator\PromotedParameter) {
+                continue;
+            }
+
+            $type = str_replace('?', '', $param->getType() ?? '');
             if ($type && $this->isDtoType($type)) {
-                $imports[] = "use {$type};";
+                // Normalize the DTO class name
+                $className = $this->normalizeDtoClassName($type);
+
+                $properNamespace = "{$this->config->namespace}\\{$this->config->dtoNamespaceSuffix}\\{$className}";
+                $imports[] = "use {$properNamespace};";
             }
         }
 
@@ -725,6 +1172,9 @@ class PhpUnitTestGenerator implements PostProcessor
     {
         // Remove nullable and union type markers
         $type = str_replace(['?', '|null'], '', $type);
+
+        // Normalize namespace separators (replace dots with backslashes)
+        $type = str_replace('.', '\\', $type);
 
         // Must contain a backslash (namespace separator)
         if (!str_contains($type, '\\')) {
@@ -740,5 +1190,45 @@ class PhpUnitTestGenerator implements PostProcessor
         $dtoNamespacePart = "\\{$this->config->dtoNamespaceSuffix}\\";
 
         return str_contains($type, $dtoNamespacePart);
+    }
+
+    /**
+     * Get test file path
+     * For namespace App\CrescatSdk:
+     *   - PHP namespace: Tests\App\CrescatSdk\Feature
+     *   - File path: tests/Feature/
+     *   - Composer autoload-dev: "Tests\App\CrescatSdk\" => "tests/"
+     */
+    protected function getTestPath(string $relativePath): string
+    {
+        // Tests go directly in tests/{relativePath}
+        // Namespace is Tests\{Config->namespace}\{relativePath} but files are in tests/{relativePath}
+        return "tests/{$relativePath}";
+    }
+
+    /**
+     * Normalize DTO class name from various formats
+     * Handles:
+     *   - "v1.ProfessionalLabResource" -> "V1ProfessionalLabResource"
+     *   - "address" -> "Address"
+     *   - "App\Sdk\Dto\UserDto" -> "UserDto"
+     */
+    protected function normalizeDtoClassName(string $dtoType): string
+    {
+        // If it contains backslashes, it's already a proper namespace - extract basename
+        if (str_contains($dtoType, '\\')) {
+            return class_basename($dtoType);
+        }
+
+        // If it contains dots, it's dot-separated like "v1.ProfessionalLab"
+        // Remove dots and capitalize first letter: "v1ProfessionalLab" -> "V1ProfessionalLab"
+        if (str_contains($dtoType, '.')) {
+            $normalized = str_replace('.', '', $dtoType);
+            return ucfirst($normalized);
+        }
+
+        // Simple class name without namespace separators
+        // Capitalize first letter: "address" -> "Address"
+        return ucfirst($dtoType);
     }
 }

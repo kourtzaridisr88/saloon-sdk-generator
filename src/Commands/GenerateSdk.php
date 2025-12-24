@@ -199,21 +199,84 @@ class GenerateSdk extends Command
                 }
             }
         }
+
+        // Format all generated files with Pint
+        $this->formatGeneratedFiles();
+    }
+
+    protected function formatGeneratedFiles(): void
+    {
+        $outputPath = realpath($this->option('output'));
+        if ($outputPath === false) {
+            return;
+        }
+
+        $vendorPath = $outputPath.'/vendor';
+        $pintPath = $vendorPath.'/bin/pint';
+
+        // Check if composer.json exists
+        if (!file_exists($outputPath.'/composer.json')) {
+            return;
+        }
+
+        // Check if vendor directory exists
+        if (!file_exists($vendorPath)) {
+            $this->comment("\n⚠ Dependencies not installed yet. Run 'composer install' in the output directory to enable code formatting.");
+            return;
+        }
+
+        // Check if Pint is available
+        if (!file_exists($pintPath)) {
+            return;
+        }
+
+        $this->comment("\nFormatting generated files...");
+
+        // Run Pint with absolute paths
+        $command = sprintf(
+            'cd %s && %s 2>&1',
+            escapeshellarg($outputPath),
+            './vendor/bin/pint'
+        );
+
+        exec($command, $output, $exitCode);
+
+        if ($exitCode === 0) {
+            $this->line("✓ Code formatting completed successfully");
+
+            // Display formatted files count if available in output
+            foreach ($output as $line) {
+                if (str_contains($line, 'fixed') || str_contains($line, 'FIXED')) {
+                    $this->line("  ".$line);
+                }
+            }
+        } else {
+            $this->warn("⚠ Code formatting completed with warnings");
+            foreach ($output as $line) {
+                $this->line("  ".$line);
+            }
+        }
     }
 
     protected function dumpToFile(PhpFile $file, $overrideFilePath = null): void
     {
+        // Get namespace and class info
+        $namespace = Arr::first($file->getNamespaces())->getName();
+        $className = Arr::first($file->getClasses())?->getName();
 
-        // TODO: Cleanup this, brittle and will break if you change the namespace
-        $wip = sprintf(
-            '%s/%s/%s.php',
+        // Remove the root namespace to get the relative path
+        // E.g., App\CrescatSdk\Resource -> Resource
+        $rootNamespace = $this->option('namespace');
+        $relativePath = str_replace($rootNamespace, '', $namespace);
+        $relativePath = ltrim($relativePath, '\\');
+        $relativePath = str_replace('\\', '/', $relativePath);
+
+        $filePath = $overrideFilePath ?? sprintf(
+            '%s/src/SDK/%s/%s.php',
             $this->option('output'),
-            str_replace($this->option('namespace'), '', Arr::first($file->getNamespaces())->getName()),
-            Arr::first($file->getClasses())?->getName(),
+            $relativePath,
+            $className
         );
-
-        // TODO: cleanup
-        $filePath = $overrideFilePath ?? Str::of($wip)->replace('\\', '/')->replace('//', '/')->toString();
 
         if (! file_exists(dirname($filePath))) {
             mkdir(dirname($filePath), recursive: true);

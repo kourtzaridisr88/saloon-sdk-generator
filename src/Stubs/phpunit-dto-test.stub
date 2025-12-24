@@ -1,10 +1,10 @@
 <?php
 
-namespace {{ namespace }}\Tests\Unit\Dto;
+namespace Tests\{{ namespace }}\Unit\Dto;
 
 use {{ dtoFullyQualifiedName }};
 {{ nestedDtoImports }}
-use PHPUnit\Framework\TestCase;
+use Tests\{{ namespace }}\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 class {{ dtoName }}Test extends TestCase
@@ -12,7 +12,7 @@ class {{ dtoName }}Test extends TestCase
     #[Test]
     public function it_can_be_created_from_json(): void
     {
-        $data = json_decode('{{ sampleJson }}', true);
+        $data = {{ sampleDataArray }};
 
         $dto = {{ dtoName }}::from($data);
 
