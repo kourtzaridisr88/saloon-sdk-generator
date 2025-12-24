@@ -8,7 +8,7 @@ use Crescat\SaloonSdkGenerator\Data\Generator\GeneratedCode;
 use Crescat\SaloonSdkGenerator\Exceptions\ParserNotRegisteredException;
 use Crescat\SaloonSdkGenerator\Factory;
 use Crescat\SaloonSdkGenerator\Generators\ComposerGenerator;
-use Crescat\SaloonSdkGenerator\Generators\PestTestGenerator;
+use Crescat\SaloonSdkGenerator\Generators\PhpUnitTestGenerator;
 use Crescat\SaloonSdkGenerator\Helpers\Utils;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -26,8 +26,7 @@ class GenerateSdk extends Command
                             {--output=./build : The output path where the code will be created, will be created if it does not exist.}
                             {--force : Force overwriting existing files}
                             {--dry : Dry run, will only show the files to be generated, does not create or modify any files.}
-                            {--zip : Generate a zip archive containing all the files}
-                            {--pest : Generate Pest test suites for each resource}';
+                            {--zip : Generate a zip archive containing all the files}';
 
     protected $description = 'Generate an SDK based on an API specification file.';
 
@@ -44,10 +43,14 @@ class GenerateSdk extends Command
 
         $type = trim(strtolower($this->option('type')));
 
+        // Append \SDK to the namespace for generated classes
+        $baseNamespace = rtrim($this->option('namespace'), '\\');
+        $sdkNamespace = $baseNamespace . '\\SDK';
+
         $generator = new CodeGenerator(
             config: new Config(
                 connectorName: $this->option('name'),
-                namespace: $this->option('namespace'),
+                namespace: $sdkNamespace,
                 resourceNamespaceSuffix: 'Resource',
                 requestNamespaceSuffix: 'Requests',
                 dtoNamespaceSuffix: 'Dto',
@@ -59,12 +62,11 @@ class GenerateSdk extends Command
             ),
         );
 
-        if ($this->option('pest')) {
-            $generator->registerPostProcessor(new PestTestGenerator);
-        }
+        // Always generate PHPUnit tests
+        $generator->registerPostProcessor(new PhpUnitTestGenerator);
 
         // Always generate composer.json
-        $generator->registerPostProcessor(new ComposerGenerator($this->option('pest')));
+        $generator->registerPostProcessor(new ComposerGenerator);
 
         try {
             $specification = Factory::parse($type, $inputPath);
@@ -118,11 +120,9 @@ class GenerateSdk extends Command
             $this->line(Utils::formatNamespaceAndClass($dtoClass));
         }
 
-        if ($this->option('pest')) {
-            $this->comment("\nTests:");
-            foreach ($result->getWithTag('pest') as $test) {
-                $this->line(Utils::formatNamespaceAndClass($test));
-            }
+        $this->comment("\nTests:");
+        foreach ($result->getWithTag('phpunit') as $test) {
+            $this->line($test->path);
         }
     }
 
@@ -150,38 +150,40 @@ class GenerateSdk extends Command
             $this->dumpToFile($dtoClass);
         }
 
-        if ($this->option('pest')) {
+        $this->comment("\nTests:");
+        foreach ($result->getWithTag('phpunit') as $test) {
+            $testFilePath = $this->option('output').'/'.$test->path;
 
-            $this->comment("\nTests:");
-            foreach ($result->getWithTag('pest') as $test) {
-                // TODO: Temporary Hacky workaround due to the way the PestTestGenerator works (not returning PhpFile)
+            if (! file_exists(dirname($testFilePath))) {
+                mkdir(dirname($testFilePath), recursive: true);
+            }
 
-                $testFilePath = $this->option('output').'/'.$test->path;
+            // Check for @sdk-never-override annotation first (takes precedence over --force)
+            if ($this->hasNeverOverrideAnnotation($testFilePath)) {
+                $this->warn("- Protected by @sdk-never-override: $testFilePath");
 
-                if (! file_exists(dirname($testFilePath))) {
-                    mkdir(dirname($testFilePath), recursive: true);
-                }
+                continue;
+            }
 
-                if (file_exists($testFilePath) && ! $this->option('force')) {
-                    $this->warn("- File already exists: $testFilePath");
+            if (file_exists($testFilePath) && ! $this->option('force')) {
+                $this->warn("- File already exists: $testFilePath");
 
-                    return;
-                }
+                continue;
+            }
 
-                $ok = file_put_contents($testFilePath, $test->file);
+            $ok = file_put_contents($testFilePath, $test->file);
 
-                if ($ok === false) {
-                    $this->error("- Failed to write: $testFilePath");
-                } else {
-                    $this->line("- Created: $testFilePath");
-                }
+            if ($ok === false) {
+                $this->error("- Failed to write: $testFilePath");
+            } else {
+                $this->line("- Created: $testFilePath");
             }
         }
 
         // Handle other additional files (composer.json, etc.) - excluding test files
         $otherFiles = collect($result->additionalFiles)
             ->filter(fn ($file) => $file instanceof \Crescat\SaloonSdkGenerator\Data\TaggedOutputFile)
-            ->filter(fn ($file) => $file->tag !== 'pest')
+            ->filter(fn ($file) => $file->tag !== 'phpunit')
             ->values();
 
         if ($otherFiles->isNotEmpty()) {
@@ -191,6 +193,13 @@ class GenerateSdk extends Command
 
                 if (! file_exists(dirname($filePath))) {
                     mkdir(dirname($filePath), recursive: true);
+                }
+
+                // Check for @sdk-never-override annotation first (takes precedence over --force)
+                if ($this->hasNeverOverrideAnnotation($filePath)) {
+                    $this->warn("- Protected by @sdk-never-override: $filePath");
+
+                    continue;
                 }
 
                 if (file_exists($filePath) && ! $this->option('force')) {
@@ -208,24 +217,133 @@ class GenerateSdk extends Command
                 }
             }
         }
+
+        // Format all generated files with Pint
+        $this->formatGeneratedFiles();
+    }
+
+    protected function formatGeneratedFiles(): void
+    {
+        $outputPath = realpath($this->option('output'));
+        if ($outputPath === false) {
+            return;
+        }
+
+        $vendorPath = $outputPath.'/vendor';
+        $pintPath = $vendorPath.'/bin/pint';
+
+        // Check if composer.json exists
+        if (!file_exists($outputPath.'/composer.json')) {
+            return;
+        }
+
+        // Check if vendor directory exists
+        if (!file_exists($vendorPath)) {
+            $this->comment("\n⚠ Dependencies not installed yet. Run 'composer install' in the output directory to enable code formatting.");
+            return;
+        }
+
+        // Check if Pint is available
+        if (!file_exists($pintPath)) {
+            return;
+        }
+
+        $this->comment("\nFormatting generated files...");
+
+        // Run Pint with absolute paths
+        $command = sprintf(
+            'cd %s && %s 2>&1',
+            escapeshellarg($outputPath),
+            './vendor/bin/pint'
+        );
+
+        exec($command, $output, $exitCode);
+
+        if ($exitCode === 0) {
+            $this->line("✓ Code formatting completed successfully");
+
+            // Display formatted files count if available in output
+            foreach ($output as $line) {
+                if (str_contains($line, 'fixed') || str_contains($line, 'FIXED')) {
+                    $this->line("  ".$line);
+                }
+            }
+        } else {
+            $this->warn("⚠ Code formatting completed with warnings");
+            foreach ($output as $line) {
+                $this->line("  ".$line);
+            }
+        }
+    }
+
+    /**
+     * Check if a file contains the @sdk-never-override annotation.
+     *
+     * This annotation can be added to the class docblock to prevent
+     * the file from being overridden, even when using the --force flag.
+     *
+     * For PHP files: Add @sdk-never-override to any docblock (typically class docblock)
+     * For JSON files (composer.json): Add "x-sdk-never-override": true field
+     *
+     * @param string $filePath Path to the file to check
+     * @return bool True if the file has the annotation, false otherwise
+     */
+    protected function hasNeverOverrideAnnotation(string $filePath): bool
+    {
+        if (!file_exists($filePath)) {
+            return false;
+        }
+
+        $content = file_get_contents($filePath);
+
+        if ($content === false) {
+            return false;
+        }
+
+        // For JSON files (like composer.json), check for x-sdk-never-override field
+        if (str_ends_with($filePath, '.json')) {
+            $decoded = json_decode($content, true);
+            if (is_array($decoded) && isset($decoded['x-sdk-never-override'])) {
+                return (bool) $decoded['x-sdk-never-override'];
+            }
+        }
+
+        // For PHP files, check if the file contains the @sdk-never-override annotation
+        // This can be in any docblock, but typically should be in the class docblock
+        return str_contains($content, '@sdk-never-override');
     }
 
     protected function dumpToFile(PhpFile $file, $overrideFilePath = null): void
     {
+        // Get namespace and class info
+        $namespace = Arr::first($file->getNamespaces())->getName();
+        $className = Arr::first($file->getClasses())?->getName();
 
-        // TODO: Cleanup this, brittle and will break if you change the namespace
-        $wip = sprintf(
-            '%s/%s/%s.php',
+        // Remove the root namespace to get the relative path
+        // E.g., App\CrescatSdk\SDK\Resource -> Resource
+        // Note: We use the SDK namespace since all generated classes have \SDK appended
+        $baseNamespace = rtrim($this->option('namespace'), '\\');
+        $rootNamespace = $baseNamespace . '\\SDK';
+        $relativePath = str_replace($rootNamespace, '', $namespace);
+        $relativePath = ltrim($relativePath, '\\');
+        $relativePath = str_replace('\\', '/', $relativePath);
+
+        $filePath = $overrideFilePath ?? sprintf(
+            '%s/src/SDK/%s/%s.php',
             $this->option('output'),
-            str_replace($this->option('namespace'), '', Arr::first($file->getNamespaces())->getName()),
-            Arr::first($file->getClasses())?->getName(),
+            $relativePath,
+            $className
         );
-
-        // TODO: cleanup
-        $filePath = $overrideFilePath ?? Str::of($wip)->replace('\\', '/')->replace('//', '/')->toString();
 
         if (! file_exists(dirname($filePath))) {
             mkdir(dirname($filePath), recursive: true);
+        }
+
+        // Check for @sdk-never-override annotation first (takes precedence over --force)
+        if ($this->hasNeverOverrideAnnotation($filePath)) {
+            $this->warn("- Protected by @sdk-never-override: $filePath");
+
+            return;
         }
 
         if (file_exists($filePath) && ! $this->option('force')) {
